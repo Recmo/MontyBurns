@@ -29,7 +29,6 @@ monty::monty(uint64 modulus)
 		b *= b;
 	}
 
-	/*
 	// Factor φ(m) = m - 1
 	phi_factors = prime_factors(m - 1);
 
@@ -42,7 +41,6 @@ monty::monty(uint64 modulus)
 			break;
 		}
 	}
-	*/
 
 	/*
 	cout << " m = " << m << endl;

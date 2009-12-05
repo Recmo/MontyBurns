@@ -6,42 +6,47 @@ class monty
 {
 	public:
 		monty(uint64 modulus);
-		
+
 		// Identity elements in the field
 		uint64 zero() const;
 		uint64 one() const;
 		uint64 two() const;
-		
+
 		// Convert to/from uint64 values
 		uint64 set(uint64 a) const;
 		uint64 get(uint64 a) const;
-		
+		uint64 get_CRT(uint64 a) const;
+
 		uint64 add(uint64 a, uint64 b) const;
 		uint64 neg(uint64 a) const;
 		uint64 sub(uint64 a, uint64 b) const;
-		
+
 		uint64 mul(uint64 a, uint64 b) const;
 		uint64 pow(uint64 a, uint64 b) const;
 		uint64 inv(uint64 a) const;
-		
+
 		uint64 order(uint64 n) const;
-		
+
 		uint64 modulus() const;
+		uint64 totient() const;
 		uint64 monty_R() const;
 		uint64 monty_r() const;
 		uint64 monty_k() const;
 		uint64 genertor() const;
-		
-		// Non Montgomery multiplication and power
+
+		// Non Montgomery multiplication
 		uint64 modular_mul(uint64 a, uint64 b) const;
-		
+
 	private:
 		uint64 m; // The modulus
 		uint64 R; // = 2⁶⁴ mod m = 2⁶⁴ - m
 		uint64 r; // = 2⁻⁶⁴ mod m = R^(m-2) mod m
+		uint64 c; // = (r m / M) mod m
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴ = R^(2⁶⁴-2) mod 2⁶⁴
 		vector<uint64> phi_factors; // Prime factors of m - 1
 		uint64 g; // Smallest generator
+
+	friend class burns;
 };
 
 /// Converts from integer to Montgomery reduced form
@@ -59,6 +64,14 @@ inline uint64 monty::set(uint64 a) const
 inline uint64 monty::get(uint64 a) const
 {
 	return modular_mul(a, r);
+}
+
+/// Converts from Montgomery reduced form to (a m / M) mod m
+/// @param a The number Monty form: a 2⁶⁴ mod m  form
+/// @returns The modular form: a mod m
+inline uint64 monty::get_CRT(uint64 a) const
+{
+	return modular_mul(a, c);
 }
 
 inline uint64 monty::zero() const
@@ -116,25 +129,25 @@ inline uint64 monty::mul(uint64 a, uint64 b) const
 	// h 2⁶⁴ + l = a b
 	uint64 h, l;
 	asm("mulq %3" : "=a"(l), "=d"(h) : "a"(a), "rm"(b));
-	
+
 	// If it is a multiple of 2⁶⁴
 	// then return the quotient
 	if(fast_false(l == 0)) return h;
-	
+
 	// u = t n  mod  r
 	//   = (r mod r) n mod r
 	//   = (l1 | l2) n mod r
 	uint64 u = l * k;
-	
+
 	// vh 2⁶⁴ + vl = u m
 	uint64 vh, vl;
 	asm("mulq %3;" : "=a"(vl), "=d"(vh) : "a"(u), "rm"(m));
-	
+
 	// a = vh + h + 1 (take care of overflow)
 	uint64 p = h + vh + 1;
 	if(p < h) p += R;
 	if(fast_false(p >= m)) p -= m;
-	
+
 	return p;
 }
 
@@ -152,6 +165,11 @@ inline uint64 monty::inv(uint64 a) const
 inline uint64 monty::modulus() const
 {
 	return m;
+}
+
+inline uint64 monty::totient() const
+{
+	return m - 1;
 }
 
 inline uint64 monty::monty_R() const
