@@ -127,50 +127,114 @@ uint64 gcd(uint64 u, uint64 v)
 	return u << shift;
 }
 
-void brents_factor(uint64 n, vector<uint64>& f)
+uint64 small_factor(uint64 n)
 {
-	if(is_prime(n))
+	if((n & 1) == 0) return 2;
+	for(uint64 i = 3; ; i += 2)
 	{
-		f.push_back(n);
-		return;
+		if(n % i == 0) return i;
 	}
+}
 
-	uint64 a = random() % n;
-	uint64 x = random() % n;
-	uint64 y = 1;
+uint64 brent_pollard_factor(uint64 n)
+{
+	const uint64 m = 1000;
+	uint64 a, x, y, ys, r, q, g;
+	do a = random() % n; while(a==0||a==n-2);
+	y = random() % n;
+	r = 1;
+	q = 1;
 
-	for(int i = 0; i*i / 2 < n; i++)
+	do
 	{
-		// x = x² + a mod n
-		x = mul(x, x, n);
-		x += a;
-		if(x < a) x += (max_uint64 - n) + 1;
-		x %= n;
-
-		uint64 g = gcd(n, y - x);
-		if(g != 1 && g != n)
+		x = y;
+		for(uint64 i=0; i < r; i++)
 		{
-			n /= g;
-			brents_factor(g, f);
-			if(n != g) brents_factor(n, f);
-			return;
+			// y = y² + a mod n
+			y = mul(y, y, n);
+			y += a;
+			if(y < a) y += (max_uint64 - n) + 1;
+			y %= n;
 		}
 
-		if((i & (i-1)) == 0) y = x;
+		uint64 k =0;
+		do
+		{
+			for(uint64 i=0; i < m && i < r-k; i++)
+			{
+				ys = y;
+
+				// y = y² + a mod n
+				y = mul(y, y, n);
+				y += a;
+				if(y < a) y += (max_uint64 - n) + 1;
+				y %= n;
+
+				// q = q |x-y| mod n
+				q = mul(q, (x>y)?x-y:y-x, n);
+			}
+			g = gcd(q, n);
+			k += m;
+		} while(k < r && g == 1);
+
+		r <<= 1;
+	} while(g == 1);
+
+	if(g == n)
+	{
+		do
+		{
+			// ys = ys² + a mod n
+			ys = mul(ys, ys, n);
+			ys += a;
+			if(ys < a) ys += (max_uint64 - n) + 1;
+			ys %= n;
+
+			g = gcd((x>ys)?x-ys:ys-x, n);
+		} while(g == 1);
 	}
 
-	// Found no factors, yet n is not a prime, retry
-	brents_factor(n, f);
+	return g;
 }
 
 vector<uint64> prime_factors(uint64 n)
 {
-	vector<uint64> f;
+	vector<uint64> factors;
+	vector<uint64> primes;
 
-	// Call on the recursive Brent's factorization
-	brents_factor(n, f);
+	uint64 factor = brent_pollard_factor(n);
+	factors.push_back(n / factor);
+	factors.push_back(factor);
 
-	// Todo: Sort and remove duplicates
+	do
+	{
+		uint64 m = factors[factors.size() - 1];
+		factors.pop_back();
 
-	return f;
+		if(m == 1) continue;
+
+		if(is_prime(m))
+		{
+			primes.push_back(m);
+
+			// Remove the prime from the other factors
+			for(int i=0; i < factors.size(); i++)
+			{
+				uint64 k = factors[i];
+				if(k % m == 0)
+				{
+					do k /= m; while(k % m == 0);
+					factors[i] = k;
+				}
+			}
+		}
+		else
+		{
+			factor = (m < 100) ? small_factor(m) : brent_pollard_factor(m);
+			factors.push_back(m / factor);
+			factors.push_back(factor);
+		}
+	} while(factors.size());
+
+	return primes;
 }

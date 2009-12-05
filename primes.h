@@ -8,7 +8,10 @@ extern const uint64s small_primes;
 /// @return A complete list of primes smaller than max
 uint64s prime_sieve(uint64 max);
 
+uint64 pollard_factor(uint64 n);
+
 vector<uint64> prime_factors(uint64 n);
+vector<uint64> factors(uint64 n);
 
 /// Miller-Rabin probabilistic primality testing
 /// @param n The number to test for  primality
