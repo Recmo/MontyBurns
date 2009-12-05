@@ -1,4 +1,6 @@
-montyburns
-Papers/*
+*~
 *.o
+callgrind.out.*
+Papers/*
+montyburns
 
