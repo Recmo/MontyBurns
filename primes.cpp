@@ -3,8 +3,6 @@
 
 const uint64s small_primes = prime_sieve(1<<20);
 
-const prime_wheel wheel;
-
 uint64s prime_sieve(uint64 max)
 {
 	vector<bool> sieve((max + 1) / 2);
@@ -18,81 +16,6 @@ uint64s prime_sieve(uint64 max)
 		primes.push_back(i);
 	}
 	return primes;
-}
-
-prime_wheel::prime_wheel()
-{
-	uint64 max_size = small_primes[small_primes.size() - 1];
-
-	max_size = 211;
-
-	size = 1;
-	for(factors = 0; size < max_size; factors++)
-	{
-		size *= small_primes[factors];
-	}
-	factors--;
-	size /= small_primes[factors];
-
-	uint64 previous = 1;
-	for(int i = 0; i < size; i++)
-	{
-		bool include = true;
-		for(int j = 0; j < factors; j++)
-		{
-			if((i % small_primes[j] == 0))
-			{
-				include = false;
-			}
-		}
-		if(!include) continue;
-		deltas.push_back(i - previous);
-		previous = i;
-	}
-	deltas.push_back(size - previous + 1);
-}
-
-vector<uint64> prime_factors_wheel(uint64 n)
-{
-	vector<uint64> f;
-
-	// Remove the twos
-	if((n & 1) == 0)
-	{
-		f.push_back(2);
-		do n >>= 1; while((n & 1) == 0);
-	}
-
-	// Remove prime wheel factors
-	uint64 p = 2;
-	for(int i = 1; p < wheel.size; i++)
-	{
-		p = small_primes[i];
-		if(fast_false(n % p == 0))
-		{
-			f.push_back(p);
-			do n /= p; while(n % p == 0);
-		}
-	}
-
-	// Turn the prime wheel
-	for(p = wheel.size + 1; p * p < n;)
-	{
-		for(int j = 0; j < wheel.deltas.size(); j++)
-		{
-			if(fast_false(n % p == 0))
-			{
-				f.push_back(p);
-				do n /= p; while(n % p == 0);
-			}
-			p += wheel.deltas[j];
-		}
-	}
-
-	// What's left must be prime or one
-	if(n != 1) f.push_back(n);
-
-	return f;
 }
 
 uint64 mul(uint64 a, uint64 b, uint64 m)
@@ -168,28 +91,23 @@ bool is_prime(uint64 n)
 // Source: http://en.wikipedia.org/wiki/Binary_GCD_algorithm
 uint64 gcd(uint64 u, uint64 v)
 {
+	if (u == 0 || v == 0) return u | v;
+
+	// Remove common twos in u and v
 	int shift;
-
-	// GCD(0,x) := x
-	if (u == 0 || v == 0)
-		return u | v;
-
-	/* Let shift := lg K, where K is the greatest power of 2
-	dividing both u and v. */
 	for (shift = 0; ((u | v) & 1) == 0; ++shift)
 	{
 		u >>= 1;
 		v >>= 1;
 	}
 
-	while ((u & 1) == 0)
-		u >>= 1;
+	// Remove twos from u
+	while ((u & 1) == 0) u >>= 1;
 
-	/* From here on, u is always odd. */
 	do
 	{
-		while ((v & 1) == 0)  /* Loop X */
-			v >>= 1;
+		// Remove twos in v
+		while ((v & 1) == 0) v >>= 1;
 
 		/* Now u and v are both odd, so diff(u, v) is even.
 		Let u = min(u, v), v = diff(u, v)/2. */
@@ -249,55 +167,10 @@ vector<uint64> prime_factors(uint64 n)
 {
 	vector<uint64> f;
 
-	// Remove factors of two
-	if((n & 1) == 0)
-	{
-		f.push_back(2);
-		do n >>= 1; while((n & 1) == 0);
-	}
-	if(n == 0 || n == 1) return f;
-
-	// Find small factors
-	for(int i=1; i < 100; i++)
-	{
-		uint64 p = small_primes[i];
-		if(n % p == 0)
-		{
-			f.push_back(p);
-			do n /= p; while(n % p ==0);
-		}
-	}
-	if(n == 1) return f;
-
 	// Call on the recursive Brent's factorization
 	brents_factor(n, f);
 
 	// Todo: Sort and remove duplicates
 
-	return f;
-}
-
-vector<uint64> prime_factors_old(uint64 n)
-{
-	vector<uint64> f;
-
-	// Remove the twos
-	if((n & 1) == 0)
-	{
-		f.push_back(2);
-		do n >>= 1; while((n & 1) == 0);
-	}
-
-	// Remove other factors
-	uint64 i;
-	for(i=3; i*i < n; i += 2)
-	{
-		if(fast_false(n % i == 0))
-		{
-			f.push_back(i);
-			do n /= i; while(n % i == 0);
-		}
-	}
-	f.push_back(n);
 	return f;
 }
