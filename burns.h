@@ -12,14 +12,15 @@ class burns
 		const int size() const;
 		const vector<monty>& montys() const;
 
+		vector<uint64> set(mpz_t integer) const;
 		void get(mpz_t integer, vector<uint64> residues) const;
-
 
 		uint64 mod(vector<uint64> residues, const monty& m) const;
 		uint64 mod64(vector<uint64> residues) const;
 
 		// Returns X mod 10^19
 		uint64 mod10(vector<uint64> residues) const;
+		uint64 to_uint64(vector<uint64> residues) const;
 
 		const mpz_t& modulus() { return M; }
 
