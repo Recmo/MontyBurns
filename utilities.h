@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <vector>
+#include <assert.h>
 
 using namespace std;
 
@@ -15,7 +16,6 @@ const uint64 max_uint64 = 0xFFFFFFFFFFFFFFFF;
 #define fast_true(a) __builtin_expect(a, 1)
 #define fast_false(a) __builtin_expect(a, 0)
 
-
 template<class T>
 inline ostream& operator<<(ostream& out, vector<T> in)
 {
@@ -29,3 +29,5 @@ inline ostream& operator<<(ostream& out, vector<T> in)
 	 out << in[i] << "]";
 	return out;
 }
+
+

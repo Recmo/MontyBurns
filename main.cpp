@@ -11,7 +11,53 @@ double timems(const timespec& start, const timespec& finish)
 	(finish.tv_nsec - start.tv_nsec) / 1e6;
 }
 
-void benchmark(int bits)
+void benchmark_utils(int bits)
+{
+	cout << "{" << bits << ", ";
+
+	// Timers
+	clockid_t cpuclock;
+	clock_getcpuclockid(0, &cpuclock);
+	timespec start, finish;
+
+	// Initialize a Monty Burns system
+	clock_gettime(cpuclock, &start);
+	burns   mb(bits);
+	clock_gettime(cpuclock, &finish);
+	cout << timems(start, finish) << ", ";
+
+	// Initialize GMP random state
+	gmp_randstate_t rnd;
+	gmp_randinit_default(rnd);
+
+	// Initialize GMP variables
+	mpz_t a, b, n, n2;
+	mpz_init(n);
+	mpz_init(n2);
+	mpz_urandomb(n, rnd, bits);
+
+	// Convert Monty Burns system
+	clock_gettime(cpuclock, &start);
+	vector<uint64> n_mb = mb.set(n);
+	clock_gettime(cpuclock, &finish);
+	cout << timems(start, finish) << ", ";
+
+	// Convert to GMP
+	clock_gettime(cpuclock, &start);
+	mb.get(n2, n_mb);
+	clock_gettime(cpuclock, &finish);
+	cout << timems(start, finish);
+
+	// Compare results
+	if(mpz_cmp(n, n2) != 0)
+	{
+		cout << "DIFFERENCE!" << endl;
+	}
+
+	cout << "}" << endl;
+}
+
+void benchmark_mul(int bits)
 {
 	cout << "{" << bits << ", ";
 
@@ -69,10 +115,10 @@ void benchmark(int bits)
 int main()
 {
 	cout << "{" << endl;
-	for(int b=1; b < 10000; b++)
+	for(int b=1; b < 1000000; b += 10000)
 	{
 		if (b != 1) cout << ",";
-		benchmark(b);
+		benchmark_utils(b);
 	}
 	cout << "}" << endl;
 
