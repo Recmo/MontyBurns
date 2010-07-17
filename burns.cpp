@@ -1,55 +1,47 @@
+#include <montyburns.h>
 #include <burns.h>
 #include <monty.h>
 #include <primes.h>
 #include <gmp.h>
 
-burns::burns(int bits)
+burns::burns()
 {
-	// The number of bits gained per prime is
-	// more than 63.999999999999 for the first
-	// hundred thousand primes.
-	// Take one bit extra to accomodate for this
-	// slight deviation from 64.
-	uint64 n = (bits + 1) / 64 + 1;
+	nsize = 0;
+}
 
-	// Find the primes and construct the Montgomery fields
-	fields.reserve(n);
-	for(uint64 p = max_uint64; fields.size() < n; p -= 2)
-	{
-		if(is_prime(p))
-		{
-			fields.push_back(monty(p));
-		}
-	}
-
+burns::burns(int n)
+{
+	nsize = n;
+	
 	// Construct M and M_approx
 	mpz_init(M);
 	mpz_set_ui(M, 1);
-	for(int i=0; i < n; i++)
+	for(int i=0; i < size(); i++)
 	{
-		uint64 modulus = fields[i].modulus();
+		uint64 modulus = mb.field(i).modulus();
 		mpz_mul_ui(M, M, modulus);
 	}
 	// gmp_printf(" M = %Zd\n", M);
-
+	
 	// Construct the (m / M) mod m
-	for(int i=0; i < n; i++)
+	mrc.reserve(size());
+	for(int i=0; i < size(); i++)
 	{
-		monty& m = fields[i];
+		const monty& m = mb.field(i);
 		uint64 M = m.one();
 		for(int j = 0; j < n; j++)
 		{
 			if(i == j) continue;
-			uint64 modulus = m.set(fields[j].modulus());
+			uint64 modulus = m.set(mb.field(j).modulus());
 			M = m.mul(M, modulus);
 		}
-		m.c = m.get(m.get(m.inv(M)));
+		mrc.push_back(m.get(m.get(m.inv(M))));
 	}
-
+	
 	Mmod3 = 1;
 	for(int i=0; i < n; i++)
 	{
-		monty& m = fields[i];
+		const monty& m = mb.field(i);
 		Mmod3 *= m.modulus() % 3;
 		Mmod3 %= 3;
 	}
@@ -84,14 +76,14 @@ vector<uint64> burns::set(mpz_t X) const
 	xi.reserve(size());
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 		uint64 residue = mpz_fdiv_ui(X, m.modulus());
 		xi.push_back(m.set(residue));
 	}
 	return xi;
 }
 
-void burns::get(mpz_t X, vector<uint64> x) const
+void burns::get(mpz_t X, const vector<uint64>& x) const
 {
 	mpz_t Mi;
 	mpz_init(Mi);
@@ -99,12 +91,12 @@ void burns::get(mpz_t X, vector<uint64> x) const
 	mpz_set_ui(X, 0);
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 
 		// Mi = M / m_i
 		mpz_divexact_ui(Mi, M, m.modulus());
 
-		uint64 y = m.get_CRT(x[i]);
+		uint64 y = m.modular_mul(x[i], mrc[i]);
 
 		// X += Mi y
 		mpz_addmul_ui(X, Mi, y);
@@ -115,19 +107,19 @@ void burns::get(mpz_t X, vector<uint64> x) const
 	mpz_mod(X, X, M);
 }
 
-uint64 burns::fractional(vector<uint64> x) const
+uint64 burns::fractional(const vector<uint64>& x) const
 {
 	uint64 X = 0;
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
-		uint64 Xi = div128(m.get_CRT(x[i]), 0, m.modulus());
+		const monty& m = mb.field(i);
+		uint64 Xi = div128(m.modular_mul(x[i], mrc[i]), 0, m.modulus());
 		X += Xi;
 	}
 	return X;
 }
 
-uint64 burns::mod64(vector<uint64> x) const
+uint64 burns::mod64(const vector<uint64>& x) const
 {
 	uint64 Xm = 0;
 	uint64 Mm = 1;
@@ -136,10 +128,10 @@ uint64 burns::mod64(vector<uint64> x) const
 	uint64 W = 0;
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.get_CRT(x[i]);
+		uint64 Xi = m.modular_mul(x[i], mrc[i]);
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -170,7 +162,7 @@ uint64 burns::mod64(vector<uint64> x) const
 	W = 0;
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 
 		uint64 xi = x[i];
 
@@ -179,7 +171,7 @@ uint64 burns::mod64(vector<uint64> x) const
 		xi = m.add(xi, Md3);
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.get_CRT(xi);
+		uint64 Xi = m.modular_mul(xi, mrc[i]);
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -201,20 +193,21 @@ uint64 burns::mod64(vector<uint64> x) const
 	return Xm;
 }
 
-uint64 burns::mod(vector<uint64> x, const monty& k) const
+uint64 burns::mod(const vector<uint64>& x, const monty& k) const
 {
 	uint64 Xk = k.zero();
 	uint64 Mk = k.one();
-
+	
+	// Try directly calculating the modulus
 	uint64 XM = 0;
 	uint64 W = 0;
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 		uint64 mk = k.set(m.modulus());
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.get_CRT(x[i]);
+		uint64 Xi = m.modular_mul(x[i], mrc[i]);
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -238,14 +231,16 @@ uint64 burns::mod(vector<uint64> x, const monty& k) const
 		// W is certain, return the result
 		return Xk;
 	}
-
+	
+	// The number of wraps was uncertain, x is very close to zero
+	//
 	// Try again, but add (M - delta) / 3
 	Xk = 0;
 	XM = 0;
 	W = 0;
 	for(int i=0; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 
 		uint64 xi = x[i];
 
@@ -254,7 +249,7 @@ uint64 burns::mod(vector<uint64> x, const monty& k) const
 		xi = m.add(xi, Md3);
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.get_CRT(xi);
+		uint64 Xi = m.modular_mul(xi, mrc[i]);
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -276,17 +271,78 @@ uint64 burns::mod(vector<uint64> x, const monty& k) const
 	return Xk;
 }
 
-/// @returns max_uint64 when the number
-uint64 burns::to_uint64(vector<uint64> x) const
+/// Calculates x = x / y mod M
+void burns::safe_div(vector<uint64>& x, const vector<uint64>& y) const
 {
-	uint64 X = fields[0].get(x[0]);
+	// Ignore montys where y_i = 0
+	// Calculate the division
+	// Base extend the result to fill in the missing montys
+}
+
+/// Calculates x /= y
+void burns::safe_div(vector<uint64>& x, const uint64 y, uint64& remainder) const
+{
+	remainder = mod(x, y);
+	for(int i=0; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		x[i] = m.div(m.sub(x[i], m.set(remainder)), m.set(y));
+		// TODO: handle y == m_i
+	}
+}
+
+/// @returns max_uint64 when the number
+uint64 burns::to_uint64(const vector<uint64>& x) const
+{
+	uint64 X = mb.field(0).get(x[0]);
 	for(int i=1; i < size(); i++)
 	{
-		const monty& m = fields[i];
+		const monty& m = mb.field(i);
 		if(m.get(x[i]) != X)
 		{
 			return max_uint64;
 		}
 	}
 	return X;
+}
+
+bool burns::equals(const vector<uint64>& x, const uint64 y) const
+{
+	for(int i=0; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		if(x[i] != m.set(y))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool burns::equals(const vector<uint64>& x, const vector<uint64>& y) const
+{
+	for(int i=0; i < size(); i++)
+	{
+		if(x[i] != y[i])
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool burns::can_shrink(const vector<uint64>& x) const
+{
+	// y = Shrink x by one monty
+	// y = Base extend y by one monty
+	// If x == y then return true
+	
+	// vector<uint64> shrunken = x;
+	// shrunken.pop();
+	// return shrunken.mod(m[size()]) == x[size()];
+	
+	
+	// Alternative:
+	//
+	// if(fractional(x) == 0) return true;
 }

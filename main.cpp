@@ -1,3 +1,4 @@
+#include <montyburns.h>
 #include <stdarg.h>
 #include <burns.h>
 #include <monty.h>
@@ -22,7 +23,7 @@ void benchmark_utils(int bits)
 
 	// Initialize a Monty Burns system
 	clock_gettime(cpuclock, &start);
-	burns   mb(bits);
+	const burns& mbrns = mb.burns_for_bits(bits);
 	clock_gettime(cpuclock, &finish);
 	cout << timems(start, finish) << ", ";
 
@@ -38,13 +39,13 @@ void benchmark_utils(int bits)
 
 	// Convert Monty Burns system
 	clock_gettime(cpuclock, &start);
-	vector<uint64> n_mb = mb.set(n);
+	vector<uint64> n_mb = mbrns.set(n);
 	clock_gettime(cpuclock, &finish);
 	cout << timems(start, finish) << ", ";
 
 	// Convert to GMP
 	clock_gettime(cpuclock, &start);
-	mb.get(n2, n_mb);
+	mbrns.get(n2, n_mb);
 	clock_gettime(cpuclock, &finish);
 	cout << timems(start, finish);
 
@@ -67,7 +68,7 @@ void benchmark_mul(int bits)
 	timespec start, finish;
 
 	// Initialize a Monty Burns system
-	burns   mb(bits);
+	const burns& mbrns = mb.burns_for_bits(bits);
 
 	// Initialize GMP random state
 	gmp_randstate_t rnd;
@@ -88,14 +89,14 @@ void benchmark_mul(int bits)
 	cout << timems(start, finish) << ", ";
 
 	// Initialize the MB variables
-	vector<uint64> a_mb = mb.set(a);
-	vector<uint64> b_mb = mb.set(b);
-	vector<uint64> n_mb(mb.size());
+	vector<uint64> a_mb = mbrns.set(a);
+	vector<uint64> b_mb = mbrns.set(b);
+	vector<uint64> n_mb(mbrns.size());
 
 	clock_gettime(cpuclock, &start);
-	for(int i=0; i < mb.size(); i++)
+	for(int i=0; i < mbrns.size(); i++)
 	{
-		const monty& m = mb.montys()[i];
+		const monty& m = mb.field(i);
 		n_mb[i] = m.mul(a_mb[i], b_mb[i]);
 	}
 	clock_gettime(cpuclock, &finish);
@@ -104,7 +105,7 @@ void benchmark_mul(int bits)
 	// Compare results
 	mpz_t n2;
 	mpz_init(n2);
-	mb.get(n2, n_mb);
+	mbrns.get(n2, n_mb);
 
 	if(mpz_cmp(n, n2) != 0)
 	{
@@ -115,7 +116,7 @@ void benchmark_mul(int bits)
 int main()
 {
 	cout << "{" << endl;
-	for(int b=1; b < 1000000; b += 10000)
+	for(int b=1; b < 100000; b += 10000)
 	{
 		if (b != 1) cout << ",";
 		benchmark_utils(b);

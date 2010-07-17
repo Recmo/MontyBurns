@@ -51,13 +51,21 @@ monty::monty(uint64 modulus)
 		g[i] = mul(g[i - 1], g[i - 1]);
 	}
 	
-/*	cout << " m = " << m << endl;
+	/*
+	cout << " m = " << m << endl;
 	cout << " R = " << R << endl;
 	cout << " r = " << r << endl;
 	cout << " k = " << k << endl;
 	cout << " F = " << phi_factors << endl;
-	cout << " g = " << get(g) << endl;
-	cout << endl;*/
+	cout << " g = [";
+	for(int i=0; i < 64; i++)
+	{
+		cout << g[i];
+		if(i < 63) cout << ", ";
+	}
+	cout << "]" << endl;
+	cout << endl;
+	*/
 }
 
 /// Modular exponentiation

@@ -1,3 +1,4 @@
+#pragma once
 #include <utilities.h>
 #include <gmp.h>
 
@@ -7,41 +8,43 @@ class monty;
 class burns
 {
 	public:
-		burns(int bits);
-
+		burns();
+		burns(int size);
+		
 		const int size() const;
 		const vector<monty>& montys() const;
-
+		
 		vector<uint64> set(mpz_t integer) const;
-		void get(mpz_t integer, vector<uint64> residues) const;
-
-		uint64 mod(vector<uint64> residues, const monty& m) const;
-		uint64 mod64(vector<uint64> residues) const;
-
+		void get(mpz_t integer, const vector<uint64>& residues) const;
+		
+		uint64 mod(const vector<uint64>& residues, const monty& m) const;
+		uint64 mod64(const vector<uint64>& residues) const;
+		
 		// Returns X mod 10^19
-		uint64 mod10(vector<uint64> residues) const;
-		uint64 to_uint64(vector<uint64> residues) const;
-
+		uint64 mod10(const vector<uint64>& residues) const;
+		uint64 to_uint64(const vector<uint64>& residues) const;
+		bool equals(const vector<uint64>& x, uint64 y) const;
+		bool equals(const vector<uint64>& x, const vector<uint64>& y) const;
+		
+		void safe_div(vector<uint64>& x, const vector<uint64>& y) const;
+		void safe_div(vector<uint64>& x, const uint64 y, uint64& remainder) const;
+		
+		bool can_shrink(const vector<uint64>& residues) const;
+		
 		const mpz_t& modulus() { return M; }
-
-		uint64 fractional(vector<uint64> residues) const;
-
-		uint64 count_wraps(vector<uint64> residues) const;
-
+		
+		uint64 fractional(const vector<uint64>& residues) const;
+		uint64 count_wraps(const vector<uint64>& residues) const;
+		
 	private:
-		vector<monty> fields;
-		vector<uint64> mrc;
-		uint64 Mmod3;
-
-		mpz_t M;
+		int nsize;
+		vector<uint64> mrc; // = (r_i m_i / M) mod m_i (non reduced)
+		uint64 Mmod3; // = M mod 3
+		mpz_t M; // = m_1 * m_2 ... m_n
 };
 
 inline const int burns::size() const
 {
-	return fields.size();
+	return nsize;
 }
 
-inline const vector<monty>& burns::montys() const
-{
-	return fields;
-}

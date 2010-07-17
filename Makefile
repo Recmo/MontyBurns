@@ -1,7 +1,10 @@
 FLAGS = -ggdb -O3 -I.
 
-montyburns: burns.o monty.o main.o primes.o
-	g++ ${FLAGS} burns.o primes.o monty.o main.o -lgmp -lrt -o montyburns
+montyburns: montyburns.o burns.o monty.o main.o primes.o
+	g++ ${FLAGS} montyburns.o burns.o primes.o monty.o main.o -lgmp -lrt -o montyburns
+
+montyburns.o: primes.h monty.h burns.h montyburns.h montyburns.cpp
+	g++ ${FLAGS} -c montyburns.cpp
 
 burns.o: primes.h monty.h burns.h burns.cpp
 	g++ ${FLAGS} -c burns.cpp
