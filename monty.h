@@ -13,6 +13,7 @@ class monty
 		
 		// Conversion to/from Montogomery reduced form
 		uint64 set(uint64 a) const;
+		uint64 set_small(uint64 a) const;
 		uint64 get(uint64 a) const;
 		
 		// Addition primitives
@@ -24,33 +25,34 @@ class monty
 		uint64 mul(uint64 a, uint64 b) const;
 		uint64 inv(uint64 a) const;
 		uint64 div(uint64 a, uint64 b) const;
-		
-		// Exponentiation and logarithm
-		uint64 order(uint64 n) const;
 		uint64 pow(uint64 a, uint64 b) const;
-		uint64 exp(uint64 a) const;
-		uint64 log(uint64 a) const;
-		uint64 log(uint64 a, uint64 b) const;
 		
 		uint64 modulus() const;
 		uint64 totient() const;
 		uint64 monty_R() const;
-		uint64 monty_r() const;
 		uint64 monty_k() const;
+		
+		#ifdef discrete_logarithm
+		// Discrete logarithm
 		uint64 generator() const;
 		vector<uint64> totient_factors() const;
+		uint64 order(uint64 n) const;
+		uint64 exp(uint64 a) const;
+		uint64 log(uint64 a) const;
+		uint64 log(uint64 a, uint64 b) const;
+		#endif
 		
 		// Non Montgomery multiplication
 		uint64 modular_mul(uint64 a, uint64 b) const;
 		
 	private:
 		uint64 m; // The modulus
-		uint64 R2; // = (2⁶⁴ mod m)² mod m
-		uint64 small; // ≤ 2⁶⁴ / R
-		uint64 r; // = 2⁻⁶⁴ mod m
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴
+		
+		#ifdef discrete_logarithm
 		uint64 g[64]; // Powers of the smallest generator
 		vector<uint64> phi_factors; // Prime factors of m - 1
+		#endif
 };
 
 /// Converts from integer to Montgomery reduced form
@@ -58,16 +60,19 @@ class monty
 /// @returns The Monty form: a 2⁶⁴ mod m
 inline uint64 monty::set(uint64 a) const
 {
-	if(fast_true(a <= small))
-	{
-		// The product requires no modular reduction
-		return a * monty_R();
-	}
 	if(fast_false(a >= m))
 	{
 		a -= m;
 	}
-	return mul(a, R2);
+	return mul(a, monty_R() * monty_R());
+}
+
+/// Converts from integer to Montgomery reduced form
+/// @param a The number in a < m / R
+/// @returns The Monty form: a 2⁶⁴ mod m
+inline uint64 monty::set_small(uint64 a) const
+{
+	return a * monty_R();
 }
 
 /// Converts from Montgomery reduced form to modular
@@ -182,8 +187,7 @@ inline uint64 monty::mul(uint64 a, uint64 b) const
 inline uint64 monty::inv(uint64 a) const
 {
 	// Apply Fermat's little theorem
-	// φ(m) = m - 1  (m is prime)
-	return pow(a, m - 2);
+	return pow(a, totient() - 1);
 }
 
 /// Modular division
@@ -207,13 +211,8 @@ inline uint64 monty::totient() const
 
 inline uint64 monty::monty_R() const
 {
-	// Recalculation is faster then loading
-	return max_uint64 - m + 1;
-}
-
-inline uint64 monty::monty_r() const
-{
-	return r;
+	// (Ab)use the twos-complement system
+	return -m;
 }
 
 inline uint64 monty::monty_k() const
@@ -221,10 +220,12 @@ inline uint64 monty::monty_k() const
 	return k;
 }
 
+#ifdef discrete_logarithm
 inline uint64 monty::generator() const
 {
 	return g[0];
 }
+#endif
 
 /// Modular multiplication
 /// @param a The first factor, a < m

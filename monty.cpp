@@ -8,36 +8,24 @@ monty::monty(uint64 modulus)
 {
 	assert(modulus > (1ul << 63));
 	assert(is_prime(modulus));
-	
 	m = modulus;
-	R2 = modular_mul(monty_R(), monty_R());
-	small = max_uint64 / monty_R();
-	
-	// φ(m) = m - 1  (m is prime)
-	// r = R^(m-2) mod m
-	r = 1;
-	uint64 b = monty_R();
-	for(uint64 e = m - 2; e; e >>= 1)
-	{
-		if(e & 1) r = modular_mul(r, b);
-		b = modular_mul(b, b);
-	}
 	
 	// φ(2⁶⁴) = 2⁶³
 	// k = R^(2⁶³-1)  (implicit mod 2⁶⁴)
 	k = 1;
-	b = monty_R();
+	uint64 b = monty_R();
 	for(uint64 e = (1ul << 63) - 1; e; e >>= 1)
 	{
 		if(e & 1) k *= b;
 		b *= b;
 	}
 	
+#ifdef discrete_logarithm
 	// Factor φ(m) = m - 1
 	phi_factors = prime_factors(m - 1);
 	
 	// Find the smalest generator
-	for(uint64 i = set(2); true; i = add(i, one()))
+	for(uint64 i = set_small(2); true; i = add(i, one()))
 	{
 		if(order(i) == m -1)
 		{
@@ -51,6 +39,7 @@ monty::monty(uint64 modulus)
 	{
 		g[i] = mul(g[i - 1], g[i - 1]);
 	}
+#endif
 	
 	/*
 	cout << " m = " << m << endl;
@@ -75,15 +64,23 @@ monty::monty(uint64 modulus)
 /// @returns The power in Monty form: b^e 2⁻⁶⁴ mod m
 uint64 monty::pow(uint64 b, uint64 e) const
 {
-	// e %= m   (not useful, very unlikely)
+	// TODO: pow might benefit from inlining
+	// constant e allows the compiler to unroll
+	// the loop
+	
 	uint64 p = one();
 	for(; e; e >>= 1)
 	{
-		if(e & 1) p = mul(p, b);
+		if(e & 1)
+		{
+			p = mul(p, b);
+		}
 		b = mul(b, b);
 	}
 	return p;
 }
+
+#ifdef discrete_logarithm
 
 uint64 monty::order(uint64 n) const
 {
@@ -109,7 +106,6 @@ uint64 monty::order(uint64 n) const
 			}
 		}
 	}
-	
 	return o;
 }
 
@@ -141,3 +137,5 @@ uint64 monty::log(uint64 a, uint64 b) const
 	/// TODO: implement
 	return 0;
 }
+
+#endif
