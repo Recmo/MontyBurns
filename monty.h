@@ -29,6 +29,7 @@ class monty
 		// Exponentiation and logarithm
 		uint64 order(uint64 n) const;
 		uint64 pow(uint64 a, uint64 b) const;
+		uint64 exp(uint64 a) const;
 		uint64 log(uint64 a) const;
 		uint64 log(uint64 a, uint64 b) const;
 		
@@ -48,7 +49,7 @@ class monty
 		uint64 R; // = 2⁶⁴ mod m
 		uint64 r; // = 2⁻⁶⁴ mod m
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴
-		uint64 g; // Smallest generator
+		uint64 g[64]; // Powers of the smallest generator
 		vector<uint64> phi_factors; // Prime factors of m - 1
 };
 
@@ -191,7 +192,7 @@ inline uint64 monty::monty_k() const
 
 inline uint64 monty::generator() const
 {
-	return g;
+	return g[0];
 }
 
 /// Modular multiplication

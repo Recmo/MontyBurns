@@ -40,9 +40,15 @@ monty::monty(uint64 modulus)
 	{
 		if(order(i) == m -1)
 		{
-			g = i;
+			g[0] = i;
 			break;
 		}
+	}
+	
+	// Calculate the powers of the generator
+	for(int i = 1; i < 64; i++)
+	{
+		g[i] = mul(g[i - 1], g[i - 1]);
 	}
 	
 /*	cout << " m = " << m << endl;
@@ -101,19 +107,22 @@ uint64 monty::order(uint64 n) const
 /// Exponentiation of the smallest generator
 uint64 monty::exp(uint64 e) const
 {
-	// Possible speedup: store a table
-	//
-	// uint64 gpow2[64]
-	// gpow2[i] = pow(g, 2^i);
-	
-	return pow(generator(), e);
+	uint64 p = R;
+	for(int i = 0; e; e >>= 1, ++i)
+	{
+		if(e & 1)
+		{
+			p = mul(p, g[i]);
+		}
+	}
+	return p;
 }
 
 /// Discrete logarithm over the smallest generator
 /// @returns e such that g^e = a mod m
 uint64 monty::log(uint64 a) const
 {
-	return log(x, generator());
+	return log(a, generator());
 }
 
 /// General discrete logarithm modulo m
