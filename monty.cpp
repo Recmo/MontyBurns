@@ -98,9 +98,28 @@ uint64 monty::order(uint64 n) const
 	return o;
 }
 
-/// TODO: Discrete logarithm
-// uint64 log(uint64 n) const
-// {
-// 	return 0;
-// }
+/// Exponentiation of the smallest generator
+uint64 monty::exp(uint64 e) const
+{
+	// Possible speedup: store a table
+	//
+	// uint64 gpow2[64]
+	// gpow2[i] = pow(g, 2^i);
+	
+	return pow(generator(), e);
+}
 
+/// Discrete logarithm over the smallest generator
+/// @returns e such that g^e = a mod m
+uint64 monty::log(uint64 a) const
+{
+	return log(x, generator());
+}
+
+/// General discrete logarithm modulo m
+/// @returns e such that a^e = b mod m
+uint64 monty::log(uint64 a, uint64 b) const
+{
+	/// TODO: implement
+	return 0;
+}

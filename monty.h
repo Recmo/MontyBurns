@@ -15,7 +15,6 @@ class monty
 		// Conversion to/from Montogomery reduced form
 		uint64 set(uint64 a) const;
 		uint64 get(uint64 a) const;
-		uint64 get_CRT(uint64 a) const;
 		
 		// Addition primitives
 		uint64 add(uint64 a, uint64 b) const;
@@ -27,10 +26,11 @@ class monty
 		uint64 inv(uint64 a) const;
 		uint64 div(uint64 a, uint64 b) const;
 		
-		// Advanced multiplication
+		// Exponentiation and logarithm
 		uint64 order(uint64 n) const;
 		uint64 pow(uint64 a, uint64 b) const;
-		uint64 log(uint64 n) const;
+		uint64 log(uint64 a) const;
+		uint64 log(uint64 a, uint64 b) const;
 		
 		uint64 modulus() const;
 		uint64 totient() const;
@@ -50,11 +50,6 @@ class monty
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴
 		uint64 g; // Smallest generator
 		vector<uint64> phi_factors; // Prime factors of m - 1
-		
-		// For chinese remaindering
-		uint64 c; // = (r m / M) mod m  (non reduced)
-		
-	friend class burns;
 };
 
 /// Converts from integer to Montgomery reduced form
@@ -72,14 +67,6 @@ inline uint64 monty::set(uint64 a) const
 inline uint64 monty::get(uint64 a) const
 {
 	return modular_mul(a, r);
-}
-
-/// Converts from Montgomery reduced form to (a m / M) mod m
-/// @param a The number Monty form: a 2⁶⁴ mod m  form
-/// @returns The modular form: a mod m
-inline uint64 monty::get_CRT(uint64 a) const
-{
-	return modular_mul(a, c);
 }
 
 inline uint64 monty::zero() const
