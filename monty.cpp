@@ -10,12 +10,13 @@ monty::monty(uint64 modulus)
 	assert(is_prime(modulus));
 	
 	m = modulus;
-	R = max_uint64 - m + 1;
+	R2 = modular_mul(monty_R(), monty_R());
+	small = max_uint64 / monty_R();
 	
 	// φ(m) = m - 1  (m is prime)
 	// r = R^(m-2) mod m
 	r = 1;
-	uint64 b = R;
+	uint64 b = monty_R();
 	for(uint64 e = m - 2; e; e >>= 1)
 	{
 		if(e & 1) r = modular_mul(r, b);
@@ -25,7 +26,7 @@ monty::monty(uint64 modulus)
 	// φ(2⁶⁴) = 2⁶³
 	// k = R^(2⁶³-1)  (implicit mod 2⁶⁴)
 	k = 1;
-	b = R;
+	b = monty_R();
 	for(uint64 e = (1ul << 63) - 1; e; e >>= 1)
 	{
 		if(e & 1) k *= b;
@@ -36,7 +37,7 @@ monty::monty(uint64 modulus)
 	phi_factors = prime_factors(m - 1);
 	
 	// Find the smalest generator
-	for(uint64 i = two(); true; i = add(i, one()))
+	for(uint64 i = set(2); true; i = add(i, one()))
 	{
 		if(order(i) == m -1)
 		{
@@ -75,7 +76,7 @@ monty::monty(uint64 modulus)
 uint64 monty::pow(uint64 b, uint64 e) const
 {
 	// e %= m   (not useful, very unlikely)
-	uint64 p = R;
+	uint64 p = one();
 	for(; e; e >>= 1)
 	{
 		if(e & 1) p = mul(p, b);
@@ -115,7 +116,7 @@ uint64 monty::order(uint64 n) const
 /// Exponentiation of the smallest generator
 uint64 monty::exp(uint64 e) const
 {
-	uint64 p = R;
+	uint64 p = one();
 	for(int i = 0; e; e >>= 1, ++i)
 	{
 		if(e & 1)

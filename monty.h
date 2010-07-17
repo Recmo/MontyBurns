@@ -10,7 +10,6 @@ class monty
 		// Some elements in the field
 		uint64 zero() const;
 		uint64 one() const;
-		uint64 two() const;
 		
 		// Conversion to/from Montogomery reduced form
 		uint64 set(uint64 a) const;
@@ -46,7 +45,8 @@ class monty
 		
 	private:
 		uint64 m; // The modulus
-		uint64 R; // = 2⁶⁴ mod m
+		uint64 R2; // = (2⁶⁴ mod m)² mod m
+		uint64 small; // ≤ 2⁶⁴ / R
 		uint64 r; // = 2⁻⁶⁴ mod m
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴
 		uint64 g[64]; // Powers of the smallest generator
@@ -58,8 +58,16 @@ class monty
 /// @returns The Monty form: a 2⁶⁴ mod m
 inline uint64 monty::set(uint64 a) const
 {
-	if(fast_false(a >= m)) a -= m;
-	return modular_mul(a, R);
+	if(fast_true(a <= small))
+	{
+		// The product requires no modular reduction
+		return a * monty_R();
+	}
+	if(fast_false(a >= m))
+	{
+		a -= m;
+	}
+	return mul(a, R2);
 }
 
 /// Converts from Montgomery reduced form to modular
@@ -67,7 +75,20 @@ inline uint64 monty::set(uint64 a) const
 /// @returns The modular form: a mod m
 inline uint64 monty::get(uint64 a) const
 {
-	return modular_mul(a, r);
+	// Optimized version of mul(a, 1):
+	if(fast_false(a == 0))
+	{
+		return 0;
+	}
+	a *= k;
+	uint64 vh, vl;
+	asm("mulq %3;" : "=a"(vl), "=d"(vh) : "a"(a), "rm"(m));
+	++vh;
+	if(fast_false(vh >= m))
+	{
+		vh -= m;
+	}
+	return vh;
 }
 
 inline uint64 monty::zero() const
@@ -77,13 +98,7 @@ inline uint64 monty::zero() const
 
 inline uint64 monty::one() const
 {
-	return R;
-}
-
-inline uint64 monty::two() const
-{
-	// R << m   so no reduction is necesary
-	return R + R;
+	return monty_R();
 }
 
 /// Modular addition
@@ -93,8 +108,14 @@ inline uint64 monty::two() const
 inline uint64 monty::add(uint64 a, uint64 b) const
 {
 	uint64 s = a + b;
-	if(s < a) s += R;
-	if(fast_false(s >= m)) s -= m;
+	if(s < a)
+	{
+		s += monty_R();
+	}
+	if(fast_false(s >= m))
+	{
+		s -= m;
+	}
 	return s;
 }
 
@@ -127,7 +148,10 @@ inline uint64 monty::mul(uint64 a, uint64 b) const
 	
 	// If it is a multiple of 2⁶⁴
 	// then return the quotient
-	if(fast_false(l == 0)) return h;
+	if(fast_false(l == 0))
+	{
+		return h;
+	}
 	
 	// u = t n  mod  r
 	//   = (r mod r) n mod r
@@ -140,8 +164,14 @@ inline uint64 monty::mul(uint64 a, uint64 b) const
 	
 	// a = vh + h + 1 (take care of overflow)
 	uint64 p = h + vh + 1;
-	if(p < h) p += R;
-	if(fast_false(p >= m)) p -= m;
+	if(p < h)
+	{
+		p += monty_R();
+	}
+	if(fast_false(p >= m))
+	{
+		p -= m;
+	}
 	
 	return p;
 }
@@ -177,7 +207,8 @@ inline uint64 monty::totient() const
 
 inline uint64 monty::monty_R() const
 {
-	return R;
+	// Recalculation is faster then loading
+	return max_uint64 - m + 1;
 }
 
 inline uint64 monty::monty_r() const
