@@ -128,7 +128,6 @@ vector<uint64> burns::set(mpz_t X) const
 	// if (l < 0) l = -l;
 	// return set(X->_mp_d, l);
 	
-	// TODO: Faster algo using divide and conquer?
 	vector<uint64> xi;
 	xi.reserve(size());
 	for(int i=0; i < size(); i++)
@@ -165,47 +164,46 @@ void burns::get(mpz_t X, const vector<uint64>& x) const
 	mpz_mod(X, X, M);
 }
 
+/// @brief In place conversion to a mixed radix representation
+///
+/// Sets x such that X = x_1 M/m_1 + x_2 M/m_1m_2 + ... + x_n
 void burns::to_mixed_radix(vector<uint64>& x) const
 {
 	for(int j = size() - 1; j >= 0; j--)
 	{
 		const monty& m = mb.field(j);
-		uint64 factor = m.neg(m.one());
+		// Incorporate an extra monty R in factor
+		// to eliminate some get and set operations
+		uint64 factor = m.neg(m.monty_R() * m.monty_R());
 		for(int i = size() - 1; i > j; i--)
 		{
 			// x += -a_i * m_0 * m_1 * ... m_i-1
-			uint64 ai = m.set(x[i]);
-			uint64 value = m.mul(ai, factor);
-			x[j] = m.add(x[j], value);
+			x[j] = m.add(x[j], m.mul(x[i], factor));
 			
 			// factor *= m_i
 			uint64 modi = mb.field(i).modulus();
 			factor = m.mul(factor, m.set(modi));
 		}
 		x[j] = m.div(x[j], m.neg(factor));
-		x[j] = m.get(x[j]);
 	}
-	// X = x_1 M/m_1 + x_2 M/m_1m_2 + ... + x_n
 }
 
 void burns::from_mixed_radix(vector<uint64>& a) const
 {
-	vector<uint64> x;
-	x.resize(size());
-	for(int i = size() - 1; i >= 0; i--)
-	{
-		const monty& m = mb.field(i);
-		x[i] = m.set(a[size() - 1]);
-		uint64 factor = m.one();
-		for(int j = size() - 2; j >= i; j--)
-		{
-			factor = m.mul(factor, m.set(mb.field(j + 1).modulus()));
-			x[i] = m.add(x[i], m.mul(m.set(a[j]), factor));
-		}
-	}
 	for(int i = 0; i < size(); i++)
 	{
-		a[i] = x[i];
+		const monty& m = mb.field(i);
+		uint64 xi = m.set(a[size() - 1]);
+		// Incorporate an extra monty R in factor
+		// to eliminate some get and set operations
+		uint64 factor = m.monty_R() * m.monty_R();
+		for(int j = size() - 2; j >= i; j--)
+		{
+			uint64 modj = mb.field(j + 1).modulus();
+			factor = m.mul(factor, m.set(modj));
+			xi = m.add(xi, m.mul(a[j], factor));
+		}
+		a[i] = xi;
 	}
 }
 
