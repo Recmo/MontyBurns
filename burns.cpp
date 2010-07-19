@@ -38,6 +38,7 @@ burns::burns(int n)
 		mrc.push_back(m.get(m.get(m.inv(M))));
 	}
 	
+	// Calculate M mod 3
 	Mmod3 = 1;
 	for(int i=0; i < n; i++)
 	{
@@ -45,6 +46,21 @@ burns::burns(int n)
 		Mmod3 *= m.modulus() % 3;
 		Mmod3 %= 3;
 	}
+	
+	// Calculate m_i^-1 mod m_j
+	/*
+	mji.resize(size());
+	for(int j = size() - 1; j >= 0; j--)
+	{
+		mji[j] = vector<uint64>(j);
+		const monty& mj = mb.field(j);
+		for(int i=0; i < j; i++)
+		{
+			const monty& mi = mb.field(i);
+			mji[j][i] = mi.inv(mi.get(mj.modulus()));
+		}
+	}
+	*/
 }
 
 uint64 div128(uint64 ah, uint64 al, uint64 d)
@@ -70,8 +86,49 @@ const uint64 inv3_mod64 = inv_mod64(3);
 const uint64 inv10_mod64 = inv_mod64(ten19);
 const double inv64 = 5.421010862427522E-20;
 
+vector<uint64> burns::set_uint64(const uint64 X) const
+{
+	vector<uint64> x;
+	x.reserve(size());
+	for(int j = 0; j < size(); j++)
+	{
+		const monty& m = mb.field(j);
+		x.push_back(m.set(X));
+	}
+	return x;
+}
+
+vector<uint64> burns::set(const uint64* X, int length) const
+{
+	if(length == 0)
+	{
+		return set_uint64(0);
+	}
+	
+	vector<uint64> x;
+	x.reserve(size());
+	for(int j = 0; j < size(); j++)
+	{
+		const monty& m = mb.field(j);
+		uint64 R2 = m.monty_R() * m.monty_R();
+		uint64 xj = m.set(X[length - 1]);
+		for(int i = length - 2; i >= 0; --i)
+		{
+			xj = m.mul(xj, R2);
+			xj = m.add(xj, m.set(X[i]));
+		}
+		x.push_back(xj);
+	}
+	return x;
+}
+
 vector<uint64> burns::set(mpz_t X) const
 {
+	// int l = X->_mp_size;
+	// if (l < 0) l = -l;
+	// return set(X->_mp_d, l);
+	
+	// TODO: Faster algo using divide and conquer?
 	vector<uint64> xi;
 	xi.reserve(size());
 	for(int i=0; i < size(); i++)
@@ -85,6 +142,7 @@ vector<uint64> burns::set(mpz_t X) const
 
 void burns::get(mpz_t X, const vector<uint64>& x) const
 {
+	// TODO: Faster algo using divide and conquer?
 	mpz_t Mi;
 	mpz_init(Mi);
 
@@ -107,6 +165,71 @@ void burns::get(mpz_t X, const vector<uint64>& x) const
 	mpz_mod(X, X, M);
 }
 
+void burns::to_mixed_radix(vector<uint64>& x) const
+{
+	for(int j = size() - 1; j >= 0; j--)
+	{
+		// const vector<uint64>& mi_inv = mji[j];
+		const monty& mj = mb.field(j);
+		x[j] = mj.get(x[j]);
+		for(int i = 0; i < j; i++)
+		{
+			
+			const monty& mi = mb.field(i);
+			x[i] = mi.sub(x[i], mi.get(x[j]));
+			// x[i] = mi.mul(x[i], mi_inv[i]);
+			
+			// The inversion is a slow operation,
+			// how can we avoid it without precalculating
+			// a O(n^2) sized table?
+			
+			x[i] = mi.div(x[i], mi.get(mj.modulus()));
+		}
+	}
+	// X = x_1 M/m_1 + x_2 M/m_1m_2 + ... + x_n
+}
+
+void burns::from_mixed_radix(vector<uint64>& x) const
+{
+	for(int i = 0; i < size(); i++)
+	{
+		const monty& mi = mb.field(i);
+		for(int j = 0; j <i; j++)
+		{
+			const monty& mj = mb.field(j);
+			x[j] = mj.mul(x[j], mj.get(mi.modulus()));
+			x[j] = mj.add(x[j], mj.get(x[i]));
+		}
+		x[i] = mi.set(x[i]);
+	}
+}
+
+int burns::compare(const vector<uint64>& x, const vector<uint64>& y)
+{
+	// First try fractional
+	uint64 xf = fractional(x);
+	uint64 yf = fractional(y);
+	if(xf > yf) return  1;
+	if(xf < yf) return -1;
+	
+	// Try equality
+	if(equals(x, y)) return 0;
+	
+	// Then compare mixed radix
+	vector<uint64> xmr = x;
+	vector<uint64> ymr = y;
+	to_mixed_radix(xmr);
+	to_mixed_radix(ymr);
+	for(int i = 0; i < size(); i++)
+	{
+		if(xmr[i] > ymr[i]) return  1;
+		if(xmr[i] < ymr[i]) return -1;
+	}
+	
+	// Error
+	return 0;
+}
+
 uint64 burns::fractional(const vector<uint64>& x) const
 {
 	uint64 X = 0;
@@ -123,7 +246,7 @@ uint64 burns::mod64(const vector<uint64>& x) const
 {
 	uint64 Xm = 0;
 	uint64 Mm = 1;
-
+	
 	uint64 XM = 0;
 	uint64 W = 0;
 	for(int i=0; i < size(); i++)
