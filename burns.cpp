@@ -169,38 +169,43 @@ void burns::to_mixed_radix(vector<uint64>& x) const
 {
 	for(int j = size() - 1; j >= 0; j--)
 	{
-		// const vector<uint64>& mi_inv = mji[j];
-		const monty& mj = mb.field(j);
-		x[j] = mj.get(x[j]);
-		for(int i = 0; i < j; i++)
+		const monty& m = mb.field(j);
+		uint64 factor = m.neg(m.one());
+		for(int i = size() - 1; i > j; i--)
 		{
+			// x += -a_i * m_0 * m_1 * ... m_i-1
+			uint64 ai = m.set(x[i]);
+			uint64 value = m.mul(ai, factor);
+			x[j] = m.add(x[j], value);
 			
-			const monty& mi = mb.field(i);
-			x[i] = mi.sub(x[i], mi.get(x[j]));
-			// x[i] = mi.mul(x[i], mi_inv[i]);
-			
-			// The inversion is a slow operation,
-			// how can we avoid it without precalculating
-			// a O(n^2) sized table?
-			
-			x[i] = mi.div(x[i], mi.get(mj.modulus()));
+			// factor *= m_i
+			uint64 modi = mb.field(i).modulus();
+			factor = m.mul(factor, m.set(modi));
 		}
+		x[j] = m.div(x[j], m.neg(factor));
+		x[j] = m.get(x[j]);
 	}
 	// X = x_1 M/m_1 + x_2 M/m_1m_2 + ... + x_n
 }
 
-void burns::from_mixed_radix(vector<uint64>& x) const
+void burns::from_mixed_radix(vector<uint64>& a) const
 {
+	vector<uint64> x;
+	x.resize(size());
+	for(int i = size() - 1; i >= 0; i--)
+	{
+		const monty& m = mb.field(i);
+		x[i] = m.set(a[size() - 1]);
+		uint64 factor = m.one();
+		for(int j = size() - 2; j >= i; j--)
+		{
+			factor = m.mul(factor, m.set(mb.field(j + 1).modulus()));
+			x[i] = m.add(x[i], m.mul(m.set(a[j]), factor));
+		}
+	}
 	for(int i = 0; i < size(); i++)
 	{
-		const monty& mi = mb.field(i);
-		for(int j = 0; j <i; j++)
-		{
-			const monty& mj = mb.field(j);
-			x[j] = mj.mul(x[j], mj.get(mi.modulus()));
-			x[j] = mj.add(x[j], mj.get(x[i]));
-		}
-		x[i] = mi.set(x[i]);
+		a[i] = x[i];
 	}
 }
 
