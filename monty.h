@@ -10,6 +10,7 @@ class monty
 		// Some elements in the field
 		uint64 zero() const;
 		uint64 one() const;
+		uint64 half() const;
 		
 		// Conversion to/from Montogomery reduced form
 		uint64 set(uint64 a) const;
@@ -29,7 +30,7 @@ class monty
 		
 		uint64 modulus() const;
 		uint64 totient() const;
-		uint64 monty_R() const;
+		uint64 monty_R() const; // = 2^64 mod m
 		uint64 monty_k() const;
 		
 		#ifdef discrete_logarithm
@@ -48,6 +49,7 @@ class monty
 	private:
 		uint64 m; // The modulus
 		uint64 k; // = (-m)⁻¹ mod 2⁶⁴
+		uint64 two_inv; // = 2⁻¹ mod m
 		
 		#ifdef discrete_logarithm
 		uint64 g[64]; // Powers of the smallest generator
@@ -104,6 +106,11 @@ inline uint64 monty::zero() const
 inline uint64 monty::one() const
 {
 	return monty_R();
+}
+
+inline uint64 monty::half() const
+{
+	return two_inv;
 }
 
 /// Modular addition
@@ -187,6 +194,8 @@ inline uint64 monty::mul(uint64 a, uint64 b) const
 inline uint64 monty::inv(uint64 a) const
 {
 	// Apply Fermat's little theorem
+	// TODO: Try JIT compiling an addition-chain
+	// for totient()-1
 	return pow(a, totient() - 1);
 }
 

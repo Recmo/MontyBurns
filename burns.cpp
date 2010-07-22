@@ -23,7 +23,7 @@ burns::burns(int n)
 	}
 	// gmp_printf(" M = %Zd\n", M);
 	
-	// Construct the (m / M) mod m
+	// Construct the (m / M) mod m in monty form
 	mrc.reserve(size());
 	for(int i=0; i < size(); i++)
 	{
@@ -35,32 +35,26 @@ burns::burns(int n)
 			uint64 modulus = m.set(mb.field(j).modulus());
 			M = m.mul(M, modulus);
 		}
-		mrc.push_back(m.get(m.get(m.inv(M))));
+		mrc.push_back(m.inv(M));
 	}
 	
-	// Calculate M mod 3
-	Mmod3 = 1;
-	for(int i=0; i < n; i++)
+	// Calculate M mod 2^64
+	Mmod64 = 1;
+	for(int i=0; i < size(); i++)
 	{
 		const monty& m = mb.field(i);
-		Mmod3 *= m.modulus() % 3;
-		Mmod3 %= 3;
+		Mmod64 *= m.modulus();
 	}
 	
-	// Calculate m_i^-1 mod m_j
-	/*
-	mji.resize(size());
-	for(int j = size() - 1; j >= 0; j--)
+	// Calculate (M + 1) / 2 mod 2^64
+	vector<uint64> M2;
+	M2.reserve(size());
+	for(int i=0; i < size(); i++)
 	{
-		mji[j] = vector<uint64>(j);
-		const monty& mj = mb.field(j);
-		for(int i=0; i < j; i++)
-		{
-			const monty& mi = mb.field(i);
-			mji[j][i] = mi.inv(mi.get(mj.modulus()));
-		}
+		const monty& m = mb.field(i);
+		M2[i] = m.inv(m.set_small(2));
 	}
-	*/
+	M2mod64 = 0;//mod64(M2); // TODO: Fix it!
 }
 
 uint64 div128(uint64 ah, uint64 al, uint64 d)
@@ -141,20 +135,19 @@ vector<uint64> burns::set(mpz_t X) const
 
 void burns::get(mpz_t X, const vector<uint64>& x) const
 {
-	// TODO: Faster algo using divide and conquer?
 	mpz_t Mi;
 	mpz_init(Mi);
-
+	
 	mpz_set_ui(X, 0);
 	for(int i=0; i < size(); i++)
 	{
 		const monty& m = mb.field(i);
-
+		
 		// Mi = M / m_i
 		mpz_divexact_ui(Mi, M, m.modulus());
-
-		uint64 y = m.modular_mul(x[i], mrc[i]);
-
+		
+		uint64 y = m.get(m.mul(x[i], mrc[i]));
+		
 		// X += Mi y
 		mpz_addmul_ui(X, Mi, y);
 	}
@@ -169,6 +162,8 @@ void burns::get(mpz_t X, const vector<uint64>& x) const
 /// Sets x such that X = x_1 M/m_1 + x_2 M/m_1m_2 + ... + x_n
 void burns::to_mixed_radix(vector<uint64>& x) const
 {
+	// TODO: develop a left-to-right method
+	// using the algorithm from fractional
 	for(int j = size() - 1; j >= 0; j--)
 	{
 		const monty& m = mb.field(j);
@@ -207,16 +202,53 @@ void burns::from_mixed_radix(vector<uint64>& a) const
 	}
 }
 
+int burns::compare(const vector<uint64>& x, const uint64 y)
+{
+	if(fast_false(y >= mb.field(size()-1).modulus()))
+	{
+		// If the maximum x < y then
+		if(size() == 1) return -1;
+		
+		// Fall back to a full comparisson
+		// Mixed radix can be fast since only
+		// the two least significants digits are
+		// required and a test if the rest is zero
+		
+		// TODO: Implement
+	}
+	
+	// y < moduli
+	uint64 value = mb.field(0).get(x[0]);
+	for(int i=1; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		if(m.get(x[i]) != value)
+		{
+			// x >= moduli
+			return 1;
+		}
+	}
+	
+	// x = value
+	if(value > y) return 1;
+	if(value < y) return -1;
+	return 0;
+}
+
+/// Does an unsigned compare
 int burns::compare(const vector<uint64>& x, const vector<uint64>& y)
 {
 	// First try fractional
 	uint64 xf = fractional(x);
 	uint64 yf = fractional(y);
-	if(xf > yf) return  1;
-	if(xf < yf) return -1;
+	if(xf + size() > xf && yf + size() > yf)
+	{
+		if(xf > yf + size()) return  1;
+		if(xf + size() < yf) return -1;
+	}
 	
 	// Try equality
-	if(equals(x, y)) return 0;
+	if(xf == yf && equals(x, y)) return 0;
 	
 	// Then compare mixed radix
 	vector<uint64> xmr = x;
@@ -233,89 +265,167 @@ int burns::compare(const vector<uint64>& x, const vector<uint64>& y)
 	return 0;
 }
 
-uint64 burns::fractional(const vector<uint64>& x) const
-{
-	uint64 X = 0;
-	for(int i=0; i < size(); i++)
-	{
-		const monty& m = mb.field(i);
-		uint64 Xi = div128(m.modular_mul(x[i], mrc[i]), 0, m.modulus());
-		X += Xi;
-	}
-	return X;
-}
-
-uint64 burns::mod64(const vector<uint64>& x) const
+uint64 burns::count_wraps(const vector<uint64>& x) const
 {
 	uint64 Xm = 0;
-	uint64 Mm = 1;
-	
 	uint64 XM = 0;
 	uint64 W = 0;
 	for(int i=0; i < size(); i++)
 	{
 		const monty& m = mb.field(i);
-
+		
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.modular_mul(x[i], mrc[i]);
-
+		uint64 Xi = m.get(m.mul(x[i], mrc[i]));
+		
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
 		if(XM < Xi) W++;
-
-		// Mm *= m mod 2⁶⁴
-		Mm *= m.modulus();
-
+		
 		// Xm += Xi / m  mod 2⁶⁴
 		Xm += Xi * inv_mod64(m.modulus());
 	}
-
+	
 	if((XM + size()) > XM)
 	{
 		// Xm -= W mod 2⁶⁴
 		Xm -= W;
-
+		
 		// Xm *= M mod 2⁶⁴
-		Xm *= Mm;
-
+		Xm *= Mmod64;
+		
 		// W is certain, return the result
-		return Xm;
+		return W;
 	}
-
-	// Try again, but add (M - delta) / 3
+	
+	// W is uncertain, could be either W or W + 1
+	// Resolve by calculating mod64
+	// What are the chances of a mod64 collision?
+	
+	// Try again, but add (M + 1) / 2
 	Xm = 0;
 	XM = 0;
 	W = 0;
 	for(int i=0; i < size(); i++)
 	{
 		const monty& m = mb.field(i);
-
+		
 		uint64 xi = x[i];
-
-		// xi += (M - (M mod 3)) / 3 mod m
-		uint64 Md3 = m.mul(m.sub(m.zero(), m.set(Mmod3)), m.inv(m.set(3)));
-		xi = m.add(xi, Md3);
-
+		
+		// xi += (M + 1) / 2 mod m = 2^-1 mod m
+		// TODO: create a m.half() function, is it faster?
+		xi = m.add(xi, m.inv(m.set_small(2)));
+		
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.modular_mul(xi, mrc[i]);
-
+		uint64 Xi = m.get(m.mul(xi, mrc[i]));
+		
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
 		if(XM < Xi) W++;
-
+		
 		// Xm += Xi / m  mod 2⁶⁴
 		Xm += Xi * inv_mod64(m.modulus());
 	}
-
+	
 	// Xm -= W mod 2⁶⁴
 	Xm -= W;
-
+	
 	// Xm *= M mod 2⁶⁴
-	Xm *= Mm;
+	Xm *= Mmod64;
+	
+	// Xm -= (M + 1) / 2 mod 2⁶⁴
+	Xm -= M2mod64;
+	
+	return Xm;
+}
 
-	// Xm -= (M - 1) / 3 mod 2⁶⁴
-	Xm -= (Mm - Mmod3) * inv_mod64(3);
+/// Returns a number y such that
+/// X = (y ... y+size()) * M / 2^64
+uint64 burns::fractional(const vector<uint64>& x) const
+{
+	uint64 X = 0;
+	for(int i=0; i < size(); i++)
+	{
+		// Add (X m M⁻¹  mod m) 2⁶⁴ / m
+		// This is not trivially obvious
+		// TODO: document
+		const monty& m = mb.field(i);
+		X += m.mul(x[i], mrc[i]) * m.monty_k();
+	}
+	return X;
+}
 
+uint64 burns::mod64(const vector<uint64>& x) const
+{
+	// TODO: Fix it!
+	
+	// Assuming small numbers are more likely
+	// then it is faster to start with the
+	// shifted version
+	uint64 Xm = 0;
+	uint64 XM = 0;
+	for(int i=0; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		
+		uint64 xi = x[i];
+		
+		// xi += (M + 1) 2⁻¹ mod m = 2⁻¹ mod m
+		xi = m.add(xi, m.half());
+		
+		// XiM = (X m M⁻¹  mod m) 2⁶⁴ / m
+		// Xim = (X m M⁻¹  mod m) mod 2⁶⁴
+		uint64 Xi = m.mul(xi, mrc[i]);
+		uint64 XiM = Xi * m.monty_k();
+		uint64 Xim = -m.get(Xi) * m.monty_k();
+		
+		XM += XiM;
+		if(XM < XiM) --Xm;
+		Xm += Xim ;
+	}
+	if((XM + size()) > XM)
+	{
+		// Xm *= M mod 2⁶⁴
+		Xm *= Mmod64;
+		
+		// Xm -= (M + 1) / 2 mod 2⁶⁴
+		Xm -= M2mod64;
+		
+		// return Xm;
+	}
+	
+	
+	cout << endl;
+	
+	// X is close to (M + 1) / 2 try again
+	Xm = 0;
+	XM = 0;
+	for(int i=0; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		
+		// XiM = (X m M⁻¹  mod m) 2⁶⁴ / m
+		// Xim = (X m M⁻¹  mod m) mod 2⁶⁴
+		uint64 Xi = m.mul(x[i], mrc[i]);
+		uint64 XiM = Xi * m.monty_k();
+		uint64 Xim = -m.get(Xi) * m.monty_k();
+		
+		cout << "x[i] = " << m.get(x[i]) << endl;
+		cout << "xim  = " << Xim * Mmod64 << endl;
+		
+		
+		XM += XiM;
+		if(XM < XiM){ --Xm; cout << "--Xm" << endl; }
+		Xm += Xim ;
+	}
+	
+	cout << "XM = " << XM << endl;
+	cout << "Xm = " << Xm << endl;
+	cout << "Mmod64 = " << Mmod64 << endl;
+	
+	// Xm *= M mod 2⁶⁴
+	Xm *= Mmod64;
+	
+	// W is certain, return the result
 	return Xm;
 }
 
@@ -333,7 +443,7 @@ uint64 burns::mod(const vector<uint64>& x, const monty& k) const
 		uint64 mk = k.set(m.modulus());
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.modular_mul(x[i], mrc[i]);
+		uint64 Xi = m.get(m.mul(x[i], mrc[i]));
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -375,7 +485,7 @@ uint64 burns::mod(const vector<uint64>& x, const monty& k) const
 		xi = m.add(xi, Md3);
 
 		// Xi = X m M⁻¹  mod m
-		uint64 Xi = m.modular_mul(xi, mrc[i]);
+		uint64 Xi = m.get(m.mul(xi, mrc[i]));
 
 		uint64 XiM = div128(Xi, 0, m.modulus());
 		XM += XiM;
@@ -417,7 +527,7 @@ void burns::safe_div(vector<uint64>& x, const uint64 y, uint64& remainder) const
 	}
 }
 
-/// @returns max_uint64 when the number
+/// @returns max_uint64 when X >= 2^64-1
 uint64 burns::to_uint64(const vector<uint64>& x) const
 {
 	uint64 X = mb.field(0).get(x[0]);
@@ -438,6 +548,31 @@ bool burns::equals(const vector<uint64>& x, const uint64 y) const
 	{
 		const monty& m = mb.field(i);
 		if(x[i] != m.set(y))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool burns::equals_small(const vector<uint64>& x, const uint64 y) const
+{
+	for(int i=0; i < size(); i++)
+	{
+		const monty& m = mb.field(i);
+		if(x[i] != m.set_small(y))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool burns::equals_zero(const vector<uint64>& x) const
+{
+	for(int i=0; i < size(); i++)
+	{
+		if(x[i])
 		{
 			return false;
 		}

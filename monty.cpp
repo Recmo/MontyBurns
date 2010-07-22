@@ -20,6 +20,8 @@ monty::monty(uint64 modulus)
 		b *= b;
 	}
 	
+	two_inv = inv(set_small(2));
+	
 #ifdef discrete_logarithm
 	// Factor φ(m) = m - 1
 	phi_factors = prime_factors(m - 1);
