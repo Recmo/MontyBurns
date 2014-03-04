@@ -29,5 +29,3 @@ inline ostream& operator<<(ostream& out, vector<T> in)
 	 out << in[i] << "]";
 	return out;
 }
-
-

@@ -34,9 +34,9 @@ uint64 mul(uint64 a, uint64 b, uint64 m)
 uint64 pow(uint64 b, uint64 e, uint64 m)
 {
 	uint64 r = 1;
-	for(; e; e >>= 1)
-	{
-		if(e & 1) r = mul(r, b, m);
+	for(; e; e >>= 1) {
+		if(e & 1)
+			r = mul(r, b, m);
 		b = mul(b, b, m);
 	}
 	return r;
@@ -56,13 +56,15 @@ bool miller_rabin(uint64 n, uint64 k)
 
 	// Verify x = k^(d 2^i) mod n != 1
 	uint64 x = pow(k % n, d, n);
-	if(x == 1 || x == n-1) return true;
-	while(s-- > 1)
-	{
+	if(x == 1 || x == n-1)
+		return true;
+	while(s-- > 1) {
 		// x = x^2 mod n
 		x = mul(x, x, n);
-		if(x == 1) return false;
-		if(x == n-1) return true;
+		if(x == 1)
+			return false;
+		if(x == n - 1)
+			return true;
 	}
 	return false;
 }
@@ -73,16 +75,16 @@ bool miller_rabin(uint64 n, uint64 k)
 bool is_prime(uint64 n)
 {
 	// Handle small primes fast
-	for(int i = 0; i < 100; i++)
-	{
+	for(int i = 0; i < 100; i++) {
 		uint64 p = small_primes[i];
-		if(n == p) return true;
-		if(n % p == 0) return false;
+		if(n == p)
+				return true;
+		if(n % p == 0)
+			return false;
 	}
 
 	// Do a few Miller-Rabin rounds
-	for(int i = 0; i < 10; i++)
-	{
+	for(int i = 0; i < 10; i++) {
 		if (!miller_rabin(n, small_primes[i])) return false;
 	}
 	return true;

@@ -12,6 +12,7 @@ const burns& montyburns_cache::burns_for_bits(int bits)
 	// Take one bit extra to accomodate for this
 	// slight deviation from 64.
 	uint64 n = (bits + 1) / 64 + 1;
+	if(n >= 2) n--;
 	
 	// Ensure sufficient montys are available
 	create_montys(n);
